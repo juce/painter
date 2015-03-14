@@ -5,8 +5,8 @@ supportedOrientations(CurrentOrientation)
 function setup()
     displayMode(FULLSCREEN)
 
-    print("Draw in the grey area")  
     local cw, ch = WIDTH, HEIGHT*0.85
+    parameter.integer("brush_radius", 2, 50, 20)
     
     canvas_bc = color(197, 197, 197, 255)
     canvas_fc = color(50, 50, 50, 255)
@@ -21,7 +21,7 @@ function setup()
     colors.orange = color(255, 151, 0, 255)
     colors.violet = color(204, 0, 255, 255)
     
-    swatches = {
+    paints = {
         {clr = colors.red},
         {clr = colors.orange},
         {clr = colors.yellow},
@@ -37,27 +37,14 @@ function setup()
     background(canvas_bc)
     setContext()
     
-    MIN_RADIUS = 30
-    MAX_RADIUS = 30
-    
-    radius = 20 --MIN_RADIUS
-    dist2 = 0
     lastX, lastY = nil, nil
-    
-    --parameter.watch("radius")
-    --parameter.watch("dist2")t
-    parameter.integer("picSource", 1, 3, 2)
-    local buttonFont = "GillSans"
-    
-    clearButton = Button("Clear", cw/2+205, HEIGHT-ch-65, 100, 60)
-    clearButton.font = buttonFont
+       
+    clearButton = Button("Clear", WIDTH-100, HEIGHT-ch-65, 100, 60)
     clearButton.clicked = function(self)
-        print("clearButton clicked")
         clearImage(canvas)
     end
     
-    invertButton = Button("Invert", cw/2+100, HEIGHT-ch-65, 100, 60)
-    invertButton.font = buttonFont
+    invertButton = Button("Invert", WIDTH-205, HEIGHT-ch-65, 100, 60)
     invertButton.clicked = function(self)
         canvas_bc, canvas_fc = canvas_fc, canvas_bc
     end
@@ -76,7 +63,7 @@ function setup()
     end
 end
 
-function drawButton(b, x, y, w, h)
+function drawPaint(b, x, y, w, h)
     pushStyle()
     strokeWidth(3)
     stroke(117, 117, 117, 255)
@@ -91,14 +78,14 @@ function drawButton(b, x, y, w, h)
     popStyle()
 end
 
-function touchButton(b, t, touch)
+function touchPaint(p, t, touch)
     if touch.state == BEGAN then
-        if inside(touch, t) then
+        if inside(touch, t.x, t.y, t.w, t.h) then
             sound(SOUND_HIT, 8783)
-            b.touched = true
+            p.touched = true
         end 
     elseif touch.state == ENDED then
-        b.touched = false
+        p.touched = nil
     end
 end
 
@@ -118,28 +105,29 @@ function draw()
     invertButton:draw()
     clearButton:draw()
     
-    local by, bw, bh = HEIGHT-ch-65, cw/2/8, 60
-    for i,b in ipairs(swatches) do
-        local x = bw*(i-1)
-        drawButton(b, x, by, bw, bh)
-        
-        if b.touched then
-            canvas_fc = canvas_fc:mix(b.clr, 0.99)
+    local py, pw, ph = HEIGHT-ch-65, 60, 60
+    for i,p in ipairs(paints) do
+        local x = pw*(i-1)
+        drawPaint(p, x, py, pw, ph)
+        -- mix color
+        if p.touched then
+            canvas_fc = canvas_fc:mix(p.clr, 0.99)
         end
     end
 end
 
 function touched(touch)
+    local cw, ch = spriteSize(canvas)
+    
     -- first, handle button events
     invertButton:touched(touch)
     clearButton:touched(touch)
     
-    -- swatches
-    local cw, ch = spriteSize(canvas)
-    local by, bw, bh = HEIGHT-ch-65, cw/2/8, 60
-    for i,b in ipairs(swatches) do
-        local t = {x=bw*(i-1), y=by, w=bw, h=bh}
-        touchButton(b, t, touch)
+    -- paints
+    local py, pw, ph = HEIGHT-ch-65, 60, 60
+    for i,p in ipairs(paints) do
+        local t = {x=pw*(i-1), y=py, w=pw, h=ph}
+        touchPaint(p, t, touch)
     end
     
     -- canvas drawing
@@ -148,19 +136,15 @@ end
  
 function canvasTouched(touch)
     local cw, ch = spriteSize(canvas)
-    local t = {x=0, y=HEIGHT-ch, w=cw, h=ch}
-    if inside(touch, t) then
+    if inside(touch, 0, HEIGHT-ch, cw, ch) then
         local cx, cy = touch.x, touch.y
         
         if touch.state == MOVING then
             moving = true
             if lastX and lastY then
-                -- set radius based on speed of movement
-                --dist2 = (cx-lastX)^2 + (cy-lastY)^2 + 1
-                --radius = math.min(MAX_RADIUS, math.max(MIN_RADIUS, 50.0/dist2))
                 pushStyle()
                 setContext(canvas)
-                strokeWidth(radius)
+                strokeWidth(brush_radius)
                 stroke(canvas_fc)
                 smooth()
                 noFill()
@@ -179,21 +163,18 @@ function canvasTouched(touch)
                 setContext(canvas)
                 stroke(canvas_fc)
                 fill(canvas_fc)
-                ellipse(cx, cy - HEIGHT + ch, radius)
+                ellipse(cx, cy - HEIGHT + ch, brush_radius)
                 setContext()
             end
-            --radius = MIN_RADIUS
             lastX, lastY = nil, nil
             
         elseif touch.state == BEGAN then
             lastX, lastY = cx, cy
-            --radius = math.max(MIN_RADIUS, math.min(MAX_RADIUS, radius * 1.06))
         end
     end
 end
 
-function inside(touch, r)
-    return r.x <= touch.x and touch.x <= r.x + r.w
-        and r.y <= touch.y and touch.y <= r.y + r.h
+function inside(touch, x, y, w, h)
+    return x <= touch.x and touch.x <= x + w
+        and y <= touch.y and touch.y <= y + h
 end
-
